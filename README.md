@@ -45,29 +45,9 @@ pip install -e .
 ## Quick Start
 
 ```python
-import seventdt as dtc
-from seventdt.plot import plot_exptime_per_filter
 from seventdt.visibility import observe_and_etc
 
-# Required exposure time (point source)
-result = dtc.calculate_exptime(
-    magnitude=19.5, snr=10,
-    filters='all', seeing=1.5,
-    ra=30.968, dec=4.245,
-    obsdate='2026-09-14T04:00:00',
-)
-
-# Expected SNR (point source)
-result = dtc.calculate_snr(
-    magnitude=19.5, exptime=300,
-    filters=['g', 'r', 'i'], seeing=1.5,
-)
-
-# Filter vs exposure time plot
-plot_exptime_per_filter(result, magnitude=19.5, snr=10)
-
-# Visibility + ETC: altitude-time plot and ETC at the optimal observation time
-observe_and_etc(
+result = observe_and_etc(
     ra=30.968, dec=4.245,
     date='2026-09-14',
     magnitude=19.5, snr=10,
