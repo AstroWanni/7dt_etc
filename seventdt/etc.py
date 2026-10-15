@@ -1,96 +1,33 @@
 """
-High-level ETC functions for point source.
+Function interface (one call, no calculator object).
 
-    from seventdt import calculate_exptime, calculate_snr
+    from seventdt import calculate_exptime, calculate_snr, calculate_limit
+    calculate_exptime(19.5, snr=10, filters='all', ra=30.97, dec=4.25, obsdate='2026-09-15T07:00:00')
+    calculate_limit(300, snr=3, mode='extended', area=100, moon_phase=0.1, moon_separation=120, airmass=1.2)
 """
-from astropy.time import Time
-from .core import ExposureCalculator
+from functools import lru_cache
+from . import constants as C
+from .calculator import ExposureCalculator
 
 
-def _make_calc() -> ExposureCalculator:
-    calc = ExposureCalculator()
-    calc.load_model()
-    return calc
+@lru_cache(maxsize=None)
+def _calc(aperture):
+    return ExposureCalculator(aperture=aperture)
 
 
-def calculate_exptime(
-    magnitude: float,
-    snr: float,
-    filters: str | list = 'all',
-    ra: float = None,
-    dec: float = None,
-    obsdate: str | Time = None,
-    moon_phase: float = None,
-    moon_separation: float = None,
-    hour_since_sunset: float = None,
-    seeing: float = None,
-    verbose: bool = True,
-) -> dict:
-    """
-    Required exposure time for a point source.
-
-    Parameters
-    ----------
-    magnitude  : AB magnitude of the source
-    snr        : target SNR
-    filters    : filter name, list of names, or 'all'
-    ra, dec    : target coordinates [deg] — used to compute moon conditions
-    obsdate    : observation time (ISO string or astropy Time)
-    moon_phase, moon_separation, hour_since_sunset : manual condition override
-    seeing     : seeing FWHM [arcsec] (default: 2.0")
-    verbose    : print computed conditions
-
-    Returns
-    -------
-    dict  keyed by filter name, each value contains:
-        t_exp, magnitude, snr, ul5_ref,
-        moon_phase, moon_separation, hour_since_sunset, seeing
-    """
-    if isinstance(obsdate, str):
-        obsdate = Time(obsdate)
-    return _make_calc().calculate_exptime(
-        filter=filters, magnitude=magnitude, snr=snr,
-        ra=ra, dec=dec, obsdate=obsdate,
-        moon_phase=moon_phase, moon_separation=moon_separation,
-        hour_since_sunset=hour_since_sunset, seeing=seeing,
-        verbose=verbose,
-    )
+def calculate_exptime(value, snr=5.0, filters='all', mode='point', area=1.0, aperture=C.DEFAULT_APERTURE,
+                      verbose=True, **conditions):
+    """Total exposure [s] to reach 'snr'. value: AB mag (point) or mag/arcsec^2 (extended)."""
+    return _calc(aperture).calculate_exptime(filters, value, snr=snr, mode=mode, area=area, verbose=verbose, **conditions)
 
 
-def calculate_snr(
-    magnitude: float,
-    exptime: float,
-    filters: str | list = 'all',
-    ra: float = None,
-    dec: float = None,
-    obsdate: str | Time = None,
-    moon_phase: float = None,
-    moon_separation: float = None,
-    hour_since_sunset: float = None,
-    seeing: float = None,
-    verbose: bool = True,
-) -> dict:
-    """
-    Expected SNR for a point source in a given exposure time.
+def calculate_snr(value, exptime, filters='all', mode='point', area=1.0, aperture=C.DEFAULT_APERTURE,
+                  verbose=True, **conditions):
+    """SNR for total exposure 'exptime' [s]."""
+    return _calc(aperture).calculate_snr(filters, value, exptime, mode=mode, area=area, verbose=verbose, **conditions)
 
-    Parameters
-    ----------
-    magnitude : AB magnitude of the source
-    exptime   : exposure time [s]
-    (rest identical to calculate_exptime)
 
-    Returns
-    -------
-    dict  keyed by filter name, each value contains:
-        snr, magnitude, exptime, ul5_exptime, filter,
-        moon_phase, moon_separation, hour_since_sunset, seeing
-    """
-    if isinstance(obsdate, str):
-        obsdate = Time(obsdate)
-    return _make_calc().calculate_snr(
-        filter=filters, magnitude=magnitude, exptime=exptime,
-        ra=ra, dec=dec, obsdate=obsdate,
-        moon_phase=moon_phase, moon_separation=moon_separation,
-        hour_since_sunset=hour_since_sunset, seeing=seeing,
-        verbose=verbose,
-    )
+def calculate_limit(exptime, snr=5.0, filters='all', mode='point', area=1.0, aperture=C.DEFAULT_APERTURE,
+                    verbose=True, **conditions):
+    """Limiting magnitude (point) or surface brightness (extended) for total exposure 'exptime' [s]."""
+    return _calc(aperture).calculate_limit(filters, exptime, snr=snr, mode=mode, area=area, verbose=verbose, **conditions)

@@ -1,215 +1,137 @@
-"""
-Visibility and scheduling utilities for 7DT.
-
-observe_and_etc()
-    Given a target (ra, dec) and a date, computes the altitude curve for the night,
-    finds the optimal observation time, and runs the ETC at that time.
-"""
-import numpy as np
-import matplotlib.pyplot as plt
+"""Night plan for one target + exposure time per filter at the best (lowest airmass) time."""
 import matplotlib.dates as mdates
-import matplotlib.colors as mcolors
-from matplotlib import patheffects
-import astropy.units as u
+import matplotlib.pyplot as plt
+import numpy as np
+from astropy.coordinates import AltAz, SkyCoord, get_body
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, AltAz, get_body
+from matplotlib import patheffects
+from matplotlib.ticker import LogLocator
+from . import constants as C
+from .calculator import ExposureCalculator
+from .conditions import get_observer, resolve_conditions
+from .plot import filter_colors
 
-from .core import get_observer
-from .etc import calculate_exptime
-from .constants import FILTER_WAVE, BROAD_BAND_COLORS, APERTURE_AREA, APERTURE_DIAMETER
+
+def night_times(date, n_points=300):
+    """Astronomical evening -> morning twilight of the night starting on local date 'YYYY-MM-DD'."""
+    obs = get_observer()
+    noon = Time(f'{date}T16:00:00')   # ~local noon (UTC-4)
+    eve = obs.twilight_evening_astronomical(noon, which='next')
+    mor = obs.twilight_morning_astronomical(eve, which='next')
+    return Time(np.linspace(eve.mjd, mor.mjd, n_points), format='mjd'), eve, mor
 
 
-# ----------------------------------------------------------------
-# Night / altitude helpers
-# ----------------------------------------------------------------
+def altitudes(ra, dec, times):
+    """(target altitude, Moon altitude) [deg] at the 7DT site."""
+    frame = AltAz(obstime=times, location=get_observer().location)
+    return (SkyCoord(ra, dec, unit='deg').transform_to(frame).alt.deg,
+            get_body('moon', times).transform_to(frame).alt.deg)
 
-def get_night_times(observer, date: str, n_points: int = 300):
+
+def observe_and_etc(ra, dec, date, value, snr=5.0, mode='point', area=100.0, seeing=2.0, aperture=C.DEFAULT_APERTURE,
+                    bands=C.MEDIUM_BANDS, calc=None, min_alt=30.0, warn_threshold=3600.0, figsize=(13, 12),
+                    save_path=None, verbose=True):
     """
-    Return time array spanning astronomical twilight for the given date.
-
-    Parameters
-    ----------
-    observer : astroplan.Observer
-    date     : 'YYYY-MM-DD' (local date at the site)
-    n_points : number of time steps
-
-    Returns
-    -------
-    times, eve_twilight, mor_twilight : Time arrays
+    ra, dec        : target [deg]
+    date           : local night start date 'YYYY-MM-DD'
+    value          : AB mag (point) or surface brightness [mag/arcsec^2] (extended)
+    snr            : target SNR (default 5)
+    mode, area     : 'point' or 'extended'; area [arcsec^2] for extended
+    seeing         : ["]
+    aperture       : 10 (default) or 5 ["] (ignored if calc is given)
+    bands          : filters to plot (default m400-m875, 25 nm steps)
+    min_alt        : altitude [deg] shaded as unobservable
+    warn_threshold : exposure [s] above which the label gets a warning mark
+    Returns (result dict per filter, info dict)
     """
-    # UTC 16:00 ≈ local noon at the 7DT site (UTC-4)
-    noon = Time(f"{date}T16:00:00")
-    eve_twilight = observer.twilight_evening_astronomical(noon, which='next')
-    mor_twilight = observer.twilight_morning_astronomical(eve_twilight, which='next')
-    times = Time(np.linspace(eve_twilight.mjd, mor_twilight.mjd, n_points), format='mjd')
-    return times, eve_twilight, mor_twilight
-
-
-def get_altitudes(observer, ra: float, dec: float, times: Time) -> np.ndarray:
-    """Target altitude [deg] at each time step."""
-    target = SkyCoord(ra=ra, dec=dec, unit='deg', frame='icrs')
-    altaz = target.transform_to(AltAz(obstime=times, location=observer.location))
-    return altaz.alt.deg
-
-
-def get_moon_altitudes(observer, times: Time) -> np.ndarray:
-    """Moon altitude [deg] at each time step."""
-    moon = get_body('moon', times)
-    altaz = moon.transform_to(AltAz(obstime=times, location=observer.location))
-    return altaz.alt.deg
-
-
-def find_optimal_time(times: Time, altitudes: np.ndarray, min_alt: float = 30.0):
-    """
-    Return the time and altitude of the best observation window.
-
-    Prefers the highest-altitude moment within the min_alt constraint.
-    Falls back to the global maximum if the target never reaches min_alt.
-    """
-    mask = altitudes >= min_alt
-    idx = int(np.argmax(altitudes * mask)) if mask.any() else int(np.argmax(altitudes))
-    return times[idx], float(altitudes[idx])
-
-
-# ----------------------------------------------------------------
-# Plot helper
-# ----------------------------------------------------------------
-
-def _get_filter_colors(filters: list) -> dict:
-    colors = dict(BROAD_BAND_COLORS)
-    mfilters = [f for f in filters if f.startswith("m")]
-    if mfilters:
-        waves = np.array([FILTER_WAVE[f][0] for f in mfilters])
-        norm = mcolors.Normalize(vmin=waves.min(), vmax=waves.max())
-        cmap = plt.get_cmap("jet")
-        for f, w in zip(mfilters, waves):
-            colors[f] = cmap(norm(w))
-    return colors
-
-
-# ----------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------
-
-def observe_and_etc(
-    ra: float,
-    dec: float,
-    date: str,
-    magnitude: float,
-    snr: float,
-    filters: str | list = 'all',
-    seeing: float = None,
-    min_alt: float = 30.0,
-    warn_threshold: float = 3600.0,
-    save_path: str = None,
-) -> dict:
-    """
-    Altitude-time plot for one night + ETC at the optimal observation time.
-
-    Parameters
-    ----------
-    ra, dec       : target coordinates [deg]
-    date          : observation date 'YYYY-MM-DD' (local date at the site)
-    magnitude     : source AB magnitude
-    snr           : target SNR
-    filters       : filter name, list, or 'all'
-    seeing        : seeing FWHM [arcsec] (default: 2.0")
-    min_alt       : minimum altitude [deg] for optimal-time search
-    warn_threshold: exposure time [s] above which ⚠ is shown on the plot
-    save_path     : file path to save the figure (optional)
-
-    Returns
-    -------
-    dict  — ETC result at the optimal time (same structure as calculate_exptime)
-    """
-    observer = get_observer()
-
-    # Night times and altitudes
-    times, eve_twilight, mor_twilight = get_night_times(observer, date)
-    target_alts = get_altitudes(observer, ra, dec, times)
-    moon_alts   = get_moon_altitudes(observer, times)
-
-    # Optimal time
-    opt_time, opt_alt = find_optimal_time(times, target_alts, min_alt)
-    sunset = observer.sun_set_time(opt_time, which='previous', horizon=-18 * u.deg)
-    hour_since_sunset = (opt_time.mjd - sunset.mjd) * 24
-
-    # ETC at optimal time
-    result = calculate_exptime(
-        magnitude=magnitude, snr=snr, filters=filters,
-        ra=ra, dec=dec, obsdate=opt_time, seeing=seeing, verbose=False,
-    )
-
-    cond = result[list(result.keys())[0]]
-    filt_list = [f for f in result if f in FILTER_WAVE]
-    colors = _get_filter_colors(filt_list)
-
-    # ---- Figure ----
-    fig, (ax_alt, ax_etc) = plt.subplots(2, 1, figsize=(13, 12))
-
-    # Upper: altitude vs time
-    ax_alt.plot(times.datetime, target_alts, color='steelblue', lw=2, label='Target')
-    ax_alt.plot(times.datetime, moon_alts, color='orange', lw=1.5, ls='--', label='Moon')
-    ax_alt.axhline(min_alt, color='gray', ls=':', lw=1, alpha=0.7,
-                   label=f'Min altitude ({min_alt}°)')
-    ax_alt.axvline(opt_time.datetime, color='red', ls='--', lw=1.5, label='Optimal time')
-    ax_alt.scatter([opt_time.datetime], [opt_alt], color='red', zorder=5, s=80)
-    ax_alt.axvspan(eve_twilight.datetime, mor_twilight.datetime, alpha=0.05, color='navy')
-
-    info = (
-        f"Optimal time : {opt_time.iso} UTC\n"
-        f"Target altitude : {opt_alt:.1f}°\n"
-        f"Moon phase : {cond['moon_phase']:.2f}  |  "
-        f"Moon sep : {cond['moon_separation']:.1f}°  |  "
-        f"Hour since sunset : {hour_since_sunset:.1f} h  |  "
-        f"Seeing : {cond['seeing']:.1f}\""
-    )
-    ax_alt.text(0.01, 0.97, info, transform=ax_alt.transAxes,
-                fontsize=13.5, va='top', ha='left',
-                bbox=dict(boxstyle='round', facecolor='white', edgecolor='gray', alpha=0.9))
-
-    ax_alt.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    ax_alt.xaxis.set_major_locator(mdates.HourLocator(interval=1))
-    plt.setp(ax_alt.xaxis.get_majorticklabels(), rotation=45, ha='right', fontsize=15)
-    ax_alt.tick_params(axis='y', labelsize=15)
-    ax_alt.set_xlabel('UTC', fontsize=18)
-    ax_alt.set_ylabel('Altitude (deg)', fontsize=18)
-    ax_alt.set_title(f'Altitude vs Time  |  RA={ra:.3f}°, Dec={dec:.3f}°  |  {date}',
-                     fontsize=19.5)
-    ax_alt.set_ylim(0, 90)
-    ax_alt.grid(alpha=0.3)
-    ax_alt.legend(fontsize=15, loc='upper right')
-
-    # Lower: ETC
-    for f in filt_list:
-        w, hw = FILTER_WAVE[f]
-        t = result[f]['t_exp']
-        c = colors.get(f, 'gray')
-        ax_etc.errorbar(w, t, xerr=hw/2, fmt='o', color=c, markersize=7,
-                        elinewidth=2.5, capsize=4, capthick=2,
-                        markeredgecolor='black', markeredgewidth=0.8)
-        label = f"{t:.0f}s"
-        if t > warn_threshold:
-            label = "⚠ " + label
-        txt = ax_etc.text(w, t * 1.12, label, ha='center', va='bottom',
-                          fontsize=12, color=c, fontweight='bold')
-        txt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
-        ftxt = ax_etc.text(w, t / 1.12, f, ha='center', va='top',
-                           fontsize=10, color=c, fontweight='bold')
-        ftxt.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
-
-    ax_etc.set_yscale('log')
-    ax_etc.set_xlabel('Wavelength (nm)', fontsize=18)
-    ax_etc.set_ylabel('Required exposure time (s)', fontsize=18)
-    ax_etc.set_title(f'ETC at Optimal Time  |  mag={magnitude:.2f}, SNR={snr:.1f}',
-                     fontsize=19.5)
-    ax_etc.tick_params(axis='both', labelsize=15)
-    ax_etc.set_xlim(350, 970)
-    ax_etc.grid(axis='y', alpha=0.3)
-
-    plt.tight_layout()
+    calc = calc or ExposureCalculator(aperture=aperture)
+    bands = calc.filter_list(bands)
+    times, eve, mor = night_times(date)
+    t_alt, m_alt = altitudes(ra, dec, times)
+    i = int(np.argmax(t_alt))
+    best, best_alt = times[i], float(t_alt[i])
+    res = calc.calculate_exptime(bands, value, snr=snr, mode=mode, area=area, ra=ra, dec=dec, obsdate=best,
+                                 seeing=seeing, verbose=False)
+    cond = resolve_conditions(ra=ra, dec=dec, obsdate=best, seeing=seeing)
+    up = t_alt >= min_alt
+    info = {'date': date, 'best_time_utc': best.iso, 'best_alt': best_alt, 'airmass': cond['airmass'],
+            'moon_phase': cond['moon_phase'], 'moon_sep': cond['moon_separation'], 'seeing': seeing,
+            'twilight_utc': (eve.iso, mor.iso),
+            'hours_above_min_alt': float(up.sum() * (mor.mjd - eve.mjd) * 24 / len(times)),
+            'window_utc': (times[up][0].iso, times[up][-1].iso) if up.any() else None}
+    vunit_txt = 'mag' if mode == 'point' else f'mag/arcsec^2, area {area:g} arcsec^2'
+    geom_txt = f'{calc.aperture:g}" aperture' if mode == 'point' else f'area {area:g} arcsec^2'
+    if verbose:
+        print(f"Target RA, Dec = {ra:.4f}, {dec:.4f} | night of {date}")
+        print(f"Astronomical twilight (UTC): {eve.iso[:16]} -> {mor.iso[:16]}")
+        print(f"Above {min_alt:g} deg (UTC): " + (f"{info['window_utc'][0][:16]} -> {info['window_utc'][1][:16]} "
+              f"({info['hours_above_min_alt']:.1f} h)" if up.any() else 'never'))
+        print(f"Best time (lowest airmass): {best.iso[:19]} UTC, alt = {best_alt:.1f} deg, airmass = {cond['airmass']:.2f}")
+        print(f"Moon phase = {cond['moon_phase']:.2f}, Moon sep = {cond['moon_separation']:.1f} deg, seeing = {seeing:g}\"")
+        print(f"{mode} source, {value} {vunit_txt.split(',')[0]}, {geom_txt}, SNR = {snr:g}, frame = {calc.frame_time:g} s\n")
+        print(f"{'filter':6} {'T[s]':>10}  frames")
+        for f in bands:
+            r = res[f]
+            print(f"{f:6} {r['exptime']:10.1f}  {r['frames']}" + ('  !' if r['exptime'] > warn_threshold else ''))
+    # ---- figure ----
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, gridspec_kw={'height_ratios': [1, 1.15]})
+    tp = times.datetime
+    ax1.plot(tp, t_alt, color='steelblue', lw=2, label='Target')
+    ax1.plot(tp, m_alt, color='orange', lw=1.5, ls='--', label='Moon')
+    ax1.axhspan(0, min_alt, color='gray', alpha=0.12, label=f'alt < {min_alt:g}°')
+    ax1.axvline(best.datetime, color='red', ls='--', lw=1.5, label='Lowest airmass')
+    ax1.scatter([best.datetime], [best_alt], color='red', s=80, zorder=5)
+    ax1.set(ylim=(0, 90), xlim=(tp[0], tp[-1]))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax1.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    ax1.tick_params(labelsize=13)
+    ax1.set_xlabel('UTC', fontsize=15)
+    ax1.set_ylabel('Altitude (deg)', fontsize=15)
+    ax1.grid(alpha=0.3)
+    ax1.legend(fontsize=12, loc='upper right')
+    am = ax1.secondary_yaxis('right', functions=(lambda a: 1 / np.sin(np.radians(np.clip(a, 5, 90))),
+                                                 lambda x: np.degrees(np.arcsin(1 / np.clip(x, 1, 11.5)))))
+    am.set_yticks([1.0, 1.1, 1.3, 1.5, 2.0, 3.0])
+    am.set_ylabel('Airmass', fontsize=15)
+    am.tick_params(labelsize=13)
+    ax1.text(0.01, 0.97, f"Night of {date}   (twilight {eve.iso[11:16]} - {mor.iso[11:16]} UTC)\n"
+             f"Best: {best.iso[:16]} UTC   alt {best_alt:.1f}°   airmass {cond['airmass']:.2f}\n"
+             f"Moon phase {cond['moon_phase']:.2f}   Moon sep {cond['moon_separation']:.1f}°   seeing {seeing:g}\"",
+             transform=ax1.transAxes, va='top', fontsize=12, bbox=dict(boxstyle='round', fc='white', ec='gray', alpha=0.9))
+    ax1.set_title(f'RA = {ra:.3f}°, Dec = {dec:.3f}°', fontsize=16)
+    col = filter_colors(bands)
+    Ts = []
+    for f in bands:
+        w, T = C.wavelength(f), res[f]['exptime']
+        if not np.isfinite(T):
+            continue
+        Ts.append(T)
+        ax2.errorbar(w, T, xerr=C.BAND_WIDTH.get(f, 25.0) / 2, fmt='o', color=col[f], ms=8, elinewidth=3, capsize=4,
+                     mec='black', mew=0.8)
+        t_ = ax2.text(w, T * 1.15, ('⚠ ' if T > warn_threshold else '') + f'{T:.0f}s', ha='center', va='bottom',
+                      fontsize=11, color=col[f], fontweight='bold')
+        t_.set_path_effects([patheffects.withStroke(linewidth=2, foreground='black')])
+    waves = [C.wavelength(f) for f in bands]
+    ax2.axhline(calc.frame_time, color='gray', ls=':', lw=1)
+    ax2.text(max(waves) + 13, calc.frame_time * 1.05, f'{calc.frame_time:g} s = 1 frame', color='gray', fontsize=10,
+             va='bottom', ha='right')
+    ax2.set_yscale('log')
+    if Ts:
+        ax2.set_ylim(min(min(Ts), calc.frame_time) / 1.5, max(max(Ts), calc.frame_time) * 2.5)
+    ax2.set_xlim(min(waves) - 15, max(waves) + 15)
+    ax2.set_xticks(waves)
+    ax2.set_xticklabels(bands, rotation=45, fontsize=11)
+    ax2.tick_params(axis='y', labelsize=13)
+    ax2.set_xlabel('Filter', fontsize=15)
+    ax2.set_ylabel(f'Exposure for SNR = {snr:g} (s)', fontsize=15)
+    ax2.yaxis.set_major_locator(LogLocator(base=10))
+    ax2.grid(axis='y', which='major', alpha=0.4)
+    ax2.grid(axis='y', which='minor', visible=False)
+    vunit = 'mag' if mode == 'point' else 'mag/arcsec$^2$'
+    geom = f'{calc.aperture:g}" aperture' if mode == 'point' else f'area {area:g} arcsec$^2$'
+    ax2.set_title(f'{mode} source  {value} {vunit},  {geom},  SNR = {snr:g}  (frame {calc.frame_time:g} s)', fontsize=15)
+    fig.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        fig.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.show()
-
-    return result
+    return res, info
