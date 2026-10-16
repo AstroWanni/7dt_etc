@@ -1,17 +1,13 @@
 """
-7dt_etc — 7DT Empirical Exposure Time Calculator
+7dt_etc — 7DT exposure time calculator with an empirical noise model
+(point and extended sources; GAIN 2750, 1x1 binning).
 """
-from .core import ExposureCalculator, get_observer
-from .etc import calculate_exptime, calculate_snr
-from .plot import plot_exptime_per_filter
+from .calculator import ExposureCalculator, load_depth_model
+from .conditions import get_observer, resolve_conditions
+from .constants import DEFAULT_BANDS, EXTRA_BANDS, MEDIUM_BANDS
+from .etc import calculate_exptime, calculate_limit, calculate_snr
 from .visibility import observe_and_etc
 
-__version__ = "0.2.0"
-__all__ = [
-    "ExposureCalculator",
-    "get_observer",
-    "calculate_exptime",
-    "calculate_snr",
-    "plot_exptime_per_filter",
-    "observe_and_etc",
-]
+__version__ = '0.3.0'
+__all__ = ['ExposureCalculator', 'load_depth_model', 'get_observer', 'resolve_conditions', 'calculate_exptime',
+           'calculate_snr', 'calculate_limit', 'observe_and_etc', 'DEFAULT_BANDS', 'EXTRA_BANDS', 'MEDIUM_BANDS']
