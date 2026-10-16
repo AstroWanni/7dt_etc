@@ -16,7 +16,8 @@ def _unit(mode):
     return 'mag' if mode == 'point' else 'mag/arcsec$^2$'
 
 
-def _finish(calc, fig, ax, cond, mode, area, title, save_path):
+def _finish(calc, fig, ax, cond, mode, area, title, save_path, return_fig=False):
+    """Show the figure once; return it only if requested (a returned Figure is displayed again by Jupyter)."""
     ax.text(0.02, 0.98, calc.conditions_text(cond, mode, area), transform=ax.transAxes, va='top', fontsize=8,
             bbox=dict(boxstyle='round', fc='white', alpha=0.8))
     ax.set_title(title, fontsize=11)
@@ -25,12 +26,14 @@ def _finish(calc, fig, ax, cond, mode, area, title, save_path):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=150, bbox_inches='tight')
+    if return_fig:
+        return fig
     plt.show()
-    return fig
+    return None
 
 
 def plot_snr_vs_exptime(calc, filter, value, mode='point', area=1.0, exptime_range=(1, 3600), n_points=300,
-                        show_sqrt_t=True, save_path=None, **cond_kw):
+                        show_sqrt_t=True, save_path=None, return_fig=False, **cond_kw):
     """SNR vs total exposure. Dotted (point only): UL5 sqrt(t) scaling without read/source noise."""
     cond = resolve_conditions(**cond_kw)
     npix, A = calc.geometry(mode, area)
@@ -45,10 +48,10 @@ def plot_snr_vs_exptime(calc, filter, value, mode='point', area=1.0, exptime_ran
             ax.plot(T, calc.snr_sqrt_t(value, p, T), color=col[f], ls=':', lw=0.8)
     ax.set(xscale='log', yscale='log', xlabel='total exposure time [s]', ylabel='SNR')
     note = ' (dotted: sqrt(t) scaling)' if show_sqrt_t and mode == 'point' else ''
-    return _finish(calc, fig, ax, cond, mode, area, f'SNR vs exposure, {mode} {value} {_unit(mode)}{note}', save_path)
+    return _finish(calc, fig, ax, cond, mode, area, f'SNR vs exposure, {mode} {value} {_unit(mode)}{note}', save_path, return_fig)
 
 
-def plot_exptime_vs_snr(calc, filter, value, mode='point', area=1.0, snr_range=(1, 100), n_points=60, save_path=None, **cond_kw):
+def plot_exptime_vs_snr(calc, filter, value, mode='point', area=1.0, snr_range=(1, 100), n_points=60, save_path=None, return_fig=False, **cond_kw):
     """Total exposure needed vs target SNR."""
     cond = resolve_conditions(**cond_kw)
     npix, A = calc.geometry(mode, area)
@@ -61,11 +64,11 @@ def plot_exptime_vs_snr(calc, filter, value, mode='point', area=1.0, snr_range=(
         S = 10 ** (-0.4 * (value - p['zp_e_s'])) * A
         ax.plot(snrs, [calc.exptime(S, p, npix, s)[0] for s in snrs], color=col[f], label=f)
     ax.set(xscale='log', yscale='log', xlabel='SNR', ylabel='total exposure time [s]')
-    return _finish(calc, fig, ax, cond, mode, area, f'Exposure vs SNR, {mode} {value} {_unit(mode)}', save_path)
+    return _finish(calc, fig, ax, cond, mode, area, f'Exposure vs SNR, {mode} {value} {_unit(mode)}', save_path, return_fig)
 
 
 def plot_limit_vs_exptime(calc, filter, snr=5.0, mode='point', area=1.0, exptime_range=(1, 3600), n_points=300,
-                          save_path=None, **cond_kw):
+                          save_path=None, return_fig=False, **cond_kw):
     """Limiting magnitude (point) or surface brightness (extended) vs total exposure."""
     cond = resolve_conditions(**cond_kw)
     npix, A = calc.geometry(mode, area)
@@ -78,11 +81,11 @@ def plot_limit_vs_exptime(calc, filter, snr=5.0, mode='point', area=1.0, exptime
         ax.plot(T, p['zp_e_s'] - 2.5 * np.log10(calc.limit_flux(p, npix, T, snr) / A), color=col[f], label=f)
     ylabel = f'{snr:g}$\\sigma$ limiting mag [AB]' if mode == 'point' else f'{snr:g}$\\sigma$ limiting SB [mag/arcsec$^2$]'
     ax.set(xscale='log', xlabel='total exposure time [s]', ylabel=ylabel)
-    return _finish(calc, fig, ax, cond, mode, area, f'Depth vs exposure ({mode})', save_path)
+    return _finish(calc, fig, ax, cond, mode, area, f'Depth vs exposure ({mode})', save_path, return_fig)
 
 
 def plot_noise_budget(calc, filt, value, mode='point', area=1.0, exptime_range=(1, 3600), n_points=300,
-                      save_path=None, **cond_kw):
+                      save_path=None, return_fig=False, **cond_kw):
     """Variance fractions (source, sky, dark, read, systematic) and SNR vs total exposure for one filter."""
     cond = resolve_conditions(**cond_kw)
     npix, A = calc.geometry(mode, area)
@@ -97,4 +100,4 @@ def plot_noise_budget(calc, filt, value, mode='point', area=1.0, exptime_range=(
     ax2.plot(T, S * T / np.sqrt(tot), 'k-', lw=1.2)
     ax2.set(yscale='log', ylabel='SNR (black line)')
     ax.set(xscale='log', xlim=exptime_range, ylim=(0, 1), xlabel='total exposure time [s]', ylabel='variance fraction')
-    return _finish(calc, fig, ax, cond, mode, area, f'Noise budget {filt}, {mode} {value} {_unit(mode)}', save_path)
+    return _finish(calc, fig, ax, cond, mode, area, f'Noise budget {filt}, {mode} {value} {_unit(mode)}', save_path, return_fig)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seventdt"
-version = "1.0.0"
+version = "1.0.1"
 description = "Exposure time calculator for 7DT with an empirical noise model (point and extended sources)"
 authors = [{ name = "GWUniverse @ Seoul National University" }]
 requires-python = ">=3.10"

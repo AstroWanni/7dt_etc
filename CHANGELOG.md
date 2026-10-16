@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] — 2026-10-17
+
+### Fixed
+- Plot functions no longer return the Figure by default, so each plot is shown once in Jupyter.
+  Use `return_fig=True` to get the Figure object (e.g. to save in another format).
+
 ## [1.0.0] — 2026-10-16
 
 First public release. The calculator is built on an empirical noise model of archived 7DT frames.
