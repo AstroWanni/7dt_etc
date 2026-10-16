@@ -1,0 +1,28 @@
+Target RA, Dec = 30.9680, 4.2450 | night of 2026-09-14
+Astronomical twilight (UTC): 2026-09-14 23:54 -> 2026-09-15 09:21
+Above 30 deg (UTC): 2026-09-15 03:48 -> 2026-09-15 09:21 (5.6 h)
+Best time (lowest airmass): 2026-09-15 07:10:50 UTC, alt = 55.2 deg, airmass = 1.22
+Moon phase = 0.18, Moon sep = 162.4 deg, seeing = 2"
+extended source, 24.0 mag/arcsec^2, area 100 arcsec^2, SNR = 5, frame = 100 s
+
+filter       T[s]  frames
+m400        262.5  2x100s + 1x62.5s
+m425        128.6  1x100s + 1x28.6s
+m450         91.0  1x91.0s
+m475         89.0  1x89.0s
+m500         91.5  1x91.5s
+m525        128.5  1x100s + 1x28.5s
+m550        228.1  2x100s + 1x28.1s
+m575        178.4  1x100s + 1x78.4s
+m600        239.0  2x100s + 1x39.0s
+m625        374.9  3x100s + 1x74.9s
+m650        355.2  3x100s + 1x55.2s
+m675        359.8  3x100s + 1x59.8s
+m700        491.3  4x100s + 1x91.3s
+m725       1061.3  10x100s + 1x61.3s
+m750       1471.1  14x100s + 1x71.1s
+m775       3096.4  30x100s + 1x96.4s
+m800       6495.5  64x100s + 1x95.5s  !
+m825       7161.4  71x100s + 1x61.4s  !
+m850      13933.1  139x100s + 1x33.1s  !
+m875      28438.0  284x100s + 1x38.0s  !
