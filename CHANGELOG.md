@@ -1,8 +1,9 @@
 # Changelog
 
-## [0.3.0] — 2026-10-16
+## [1.0.0] — 2026-10-16
 
-The calculator is rebuilt on an empirical noise model. **This release is not backward compatible with 0.2.x.**
+First public release. The calculator is built on an empirical noise model of archived 7DT frames.
+Earlier versions (0.x) were development snapshots and are not supported.
 
 ### Added
 - **Noise model**: SNR = S·T / sqrt(S·T + Npix·(B·T + N·RN²)), with the per-pixel background B derived from the
@@ -29,8 +30,8 @@ The calculator is rebuilt on an empirical noise model. **This release is not bac
 - Medium-band plot colors use a fixed rainbow scale over 400–875 nm.
 - Packaging moved from `setup.py` to `pyproject.toml`.
 
-### API changes (migration from 0.2.x)
-| 0.2.x | 0.3.0 |
+### API changes from the development snapshots (0.2.x)
+| 0.2.x | 1.0.0 |
 |---|---|
 | `calculate_exptime(filter, magnitude, snr, ...)` | `calculate_exptime(filter, value, snr, mode='point', area=1.0, ...)` |
 | `calculate_snr(filter, magnitude, exptime, ...)` | `calculate_snr(filter, value, exptime, mode='point', area=1.0, ...)` |
@@ -47,5 +48,5 @@ The calculator is rebuilt on an empirical noise model. **This release is not bac
 - Most reliable for typical conditions (airmass 1.2–1.7, average Moon); very bright Moon and airmass > 1.7 are less accurate.
 - Extended-source limits over large areas assume independent pixel noise and are optimistic.
 
-## [0.2.0]
+## Development snapshots (0.x, not released)
 - Point-source calculator based on the 100 s 5σ depth model with sqrt(t) scaling.

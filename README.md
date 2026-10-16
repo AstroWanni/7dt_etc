@@ -6,7 +6,7 @@ noise model of archived 7DT frames. Supports **point sources** and **extended so
 
 Developed by **GWUniverse @ Seoul National University**.
 
-> **v0.3.0** replaces the previous depth-only calculator. See [CHANGELOG](CHANGELOG.md) for breaking changes.
+> **v1.0.0** — first public release. See [CHANGELOG](CHANGELOG.md).
 
 ---
 
