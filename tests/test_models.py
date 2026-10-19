@@ -1,5 +1,5 @@
 import numpy as np
-from seventdt import DEFAULT_BANDS, load_depth_model
+from sevendt_etc import DEFAULT_BANDS, load_depth_model
 from conftest import COND
 
 KEYS = {'intercept', 'coefficients', 'features', 'exptime', 'aperture', 'zp_e_s'}
@@ -22,7 +22,7 @@ def test_default_bands_present(calc):
 
 def test_sky_consistent_between_apertures(calc, calc5):
     """Sky is a property of the sky, not of the aperture: both models should agree at typical conditions."""
-    from seventdt import resolve_conditions
+    from sevendt_etc import resolve_conditions
     cond = resolve_conditions(**COND)
     d = [calc.band_params(f, cond)['mu_sky'] - calc5.band_params(f, cond)['mu_sky'] for f in calc.default_bands]
     assert abs(np.nanmedian(d)) < 0.2

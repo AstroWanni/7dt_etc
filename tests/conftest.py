@@ -1,5 +1,5 @@
 import pytest
-from seventdt import ExposureCalculator
+from sevendt_etc import ExposureCalculator
 
 # Fixed conditions (no ra/dec/obsdate -> no ephemeris calculation, tests run offline)
 COND = dict(moon_phase=0.5, moon_separation=90.0, airmass=1.2, seeing=2.0)

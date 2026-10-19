@@ -1,4 +1,5 @@
 """Night plan for one target + exposure time per filter at the best (lowest airmass) time."""
+from pathlib import Path
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,7 +31,7 @@ def altitudes(ra, dec, times):
 
 def observe_and_etc(ra, dec, date, value, snr=5.0, mode='point', area=100.0, seeing=2.0, aperture=C.DEFAULT_APERTURE,
                     bands=C.MEDIUM_BANDS, calc=None, min_alt=30.0, warn_threshold=3600.0, figsize=(13, 12),
-                    save_path=None, verbose=True):
+                    save_path=None, report_path=None, verbose=True):
     """
     ra, dec        : target [deg]
     date           : local night start date 'YYYY-MM-DD'
@@ -42,7 +43,8 @@ def observe_and_etc(ra, dec, date, value, snr=5.0, mode='point', area=100.0, see
     bands          : filters to plot (default m400-m875, 25 nm steps)
     min_alt        : altitude [deg] shaded as unobservable
     warn_threshold : exposure [s] above which the label gets a warning mark
-    Returns (result dict per filter, info dict)
+    save_path      : file for the figure;  report_path : file for the text report
+    Returns (result dict per filter, info dict); info['report'] holds the text report
     """
     calc = calc or ExposureCalculator(aperture=aperture)
     bands = calc.filter_list(bands)
@@ -59,20 +61,17 @@ def observe_and_etc(ra, dec, date, value, snr=5.0, mode='point', area=100.0, see
             'twilight_utc': (eve.iso, mor.iso),
             'hours_above_min_alt': float(up.sum() * (mor.mjd - eve.mjd) * 24 / len(times)),
             'window_utc': (times[up][0].iso, times[up][-1].iso) if up.any() else None}
-    vunit_txt = 'mag' if mode == 'point' else f'mag/arcsec^2, area {area:g} arcsec^2'
-    geom_txt = f'{calc.aperture:g}" aperture' if mode == 'point' else f'area {area:g} arcsec^2'
+    window = (f"{info['window_utc'][0][:16]} -> {info['window_utc'][1][:16]} UTC ({info['hours_above_min_alt']:.1f} h)"
+              if up.any() else 'never')
+    plan = '\n'.join([f'Night          : {date} (local)',
+                      f'Twilight       : {eve.iso[:16]} -> {mor.iso[:16]} UTC (astronomical)',
+                      f'Above {min_alt:g} deg   : {window}',
+                      f'Recommended    : {best.iso[:19]} UTC (lowest airmass), alt = {best_alt:.1f} deg'])
+    info['report'] = calc.exptime_report(res, cond, mode, area, plan=plan, warn_threshold=warn_threshold)
+    if report_path:
+        Path(report_path).write_text(info['report'] + '\n')
     if verbose:
-        print(f"Target RA, Dec = {ra:.4f}, {dec:.4f} | night of {date}")
-        print(f"Astronomical twilight (UTC): {eve.iso[:16]} -> {mor.iso[:16]}")
-        print(f"Above {min_alt:g} deg (UTC): " + (f"{info['window_utc'][0][:16]} -> {info['window_utc'][1][:16]} "
-              f"({info['hours_above_min_alt']:.1f} h)" if up.any() else 'never'))
-        print(f"Best time (lowest airmass): {best.iso[:19]} UTC, alt = {best_alt:.1f} deg, airmass = {cond['airmass']:.2f}")
-        print(f"Moon phase = {cond['moon_phase']:.2f}, Moon sep = {cond['moon_separation']:.1f} deg, seeing = {seeing:g}\"")
-        print(f"{mode} source, {value} {vunit_txt.split(',')[0]}, {geom_txt}, SNR = {snr:g}, frame = {calc.frame_time:g} s\n")
-        print(f"{'filter':6} {'T[s]':>10}  frames")
-        for f in bands:
-            r = res[f]
-            print(f"{f:6} {r['exptime']:10.1f}  {r['frames']}" + ('  !' if r['exptime'] > warn_threshold else ''))
+        print(info['report'])
     # ---- figure ----
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, gridspec_kw={'height_ratios': [1, 1.15]})
     tp = times.datetime

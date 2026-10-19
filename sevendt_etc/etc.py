@@ -1,7 +1,7 @@
 """
 Function interface (one call, no calculator object).
 
-    from seventdt import calculate_exptime, calculate_snr, calculate_limit
+    from sevendt_etc import calculate_exptime, calculate_snr, calculate_limit
     calculate_exptime(19.5, snr=10, filters='all', ra=30.97, dec=4.25, obsdate='2026-09-15T07:00:00')
     calculate_limit(300, snr=3, mode='extended', area=100, moon_phase=0.1, moon_separation=120, airmass=1.2)
 """

@@ -4,7 +4,7 @@
 Conditions -> depth model (UL5 of a 100 s frame, aperture D) -> per-pixel background
     UL5 = b0 + b1*moon_phase + b2*moon_sep + b3*airmass + b4*seeing
     sigma_ap = 10^(-0.4 (UL5 - ZP)) * t_ref / 5,  var_pix = sigma_ap^2 / N_ref,  B = (var_pix - RN^2) / t_ref
-Total exposure T = k full frames + one remainder frame (N = number of frames):
+Total exposure T is taken as N = ceil(T / frame_time) frames (read noise counted once per frame):
     SNR = S*T / sqrt( S*T + Npix * (B*T + N*RN^2) + (f_sys * B_sky*T*Npix)^2 )
     point    : S = 10^(-0.4 (m  - ZP)),     Npix = pixels in the aperture
     extended : S = 10^(-0.4 (mu - ZP)) * A, Npix = A / pixscale^2   (mu [mag/arcsec^2], A [arcsec^2])
@@ -19,11 +19,16 @@ from . import plot as _plot
 from .conditions import resolve_conditions
 
 
+def _version():
+    from . import __version__
+    return __version__
+
+
 def load_depth_model(aperture=C.DEFAULT_APERTURE):
     """Packaged depth model for the aperture diameter [arcsec] (10 or 5)."""
     if aperture not in C.APERTURE_MODELS:
         raise ValueError(f'aperture must be one of {list(C.APERTURE_MODELS)}')
-    return json.loads(resources.files('seventdt.models').joinpath(C.APERTURE_MODELS[aperture]).read_text())
+    return json.loads(resources.files('sevendt_etc.models').joinpath(C.APERTURE_MODELS[aperture]).read_text())
 
 
 class ExposureCalculator:
@@ -83,8 +88,10 @@ class ExposureCalculator:
         var_pix = (10 ** (-0.4 * (ul5 - zp)) * t_ref / 5) ** 2 / self.n_ref
         bkg = max(var_pix - self.rn ** 2, 0.0) / t_ref
         sky = max(bkg - self.dark, 0.0)
+        skysig = float(np.sqrt(bkg * self.frame_time + self.rn ** 2))   # per pixel, one frame (sky + dark + read)
         return {'ul5_ref': ul5, 't_ref': t_ref, 'zp_e_s': zp, 'bkg_rate': bkg, 'sky_rate': sky,
                 'mu_sky': zp - 2.5 * np.log10(sky / self.pixscale ** 2) if sky > 0 else np.nan,
+                'skysig_e': skysig, 'skysig_adu': skysig / C.EGAIN,
                 'rn_frac_ref': min(self.rn ** 2 / var_pix, 1.0) if var_pix > 0 else 1.0,
                 'floor_hit': bool(var_pix <= self.rn ** 2 + self.dark * t_ref)}
 
@@ -97,21 +104,9 @@ class ExposureCalculator:
         raise ValueError("mode must be 'point' or 'extended'")
 
     # ---------------- frames ----------------
-    def split(self, T):
-        """T -> (k full frames, remainder r [s])."""
-        T = np.asarray(T, float)
-        k = np.floor(T / self.frame_time + 1e-9)
-        r = np.clip(T - k * self.frame_time, 0, None)
-        return k, np.where(r < 1e-6, 0.0, r)
-
     def n_frame(self, T):
-        k, r = self.split(T)
-        return np.maximum(1, k + (r > 0))
-
-    def frames_text(self, T):
-        k, r = (float(x) for x in self.split(T))
-        parts = ([f'{int(k)}x{self.frame_time:g}s'] if k else []) + ([f'1x{r:.1f}s'] if r > 0 else [])
-        return ' + '.join(parts) if parts else '0'
+        """Number of frames for total exposure T: ceil(T / frame_time), at least 1."""
+        return np.maximum(1, np.ceil(np.asarray(T, float) / self.frame_time - 1e-9)).astype(int)
 
     # ---------------- noise model ----------------
     def var_components(self, S, p, npix, T):
@@ -169,7 +164,7 @@ class ExposureCalculator:
             var = self.var_components(S, p, npix, T)
             tot = sum(var.values())
             res[key] = {'filter': f, 'value': float(v), 'exptime': float(T), 'n_frame': int(self.n_frame(T)),
-                        'frames': self.frames_text(T), 'snr': float(self.snr(S, p, npix, T)),
+                        'snr': float(self.snr(S, p, npix, T)),
                         'snr_sqrt_t': float(self.snr_sqrt_t(v, p, T)) if mode == 'point' else np.nan,
                         **{f'frac_{k}': float(x / tot) for k, x in var.items()}, **p}
         if verbose:
@@ -185,10 +180,9 @@ class ExposureCalculator:
         for key, f, v, s in zip(keys, filters, vals, snrs):
             p = self.band_params(f, cond)
             T, n = self.exptime(10 ** (-0.4 * (v - p['zp_e_s'])) * A, p, npix, s)
-            res[key] = {'filter': f, 'value': float(v), 'snr': float(s), 'exptime': T, 'n_frame': n,
-                        'frames': self.frames_text(T) if np.isfinite(T) else '-', **p}
+            res[key] = {'filter': f, 'value': float(v), 'snr': float(s), 'exptime': T, 'n_frame': n, **p}
         if verbose:
-            self._print(res, cond, mode, area, 'exptime')
+            print(self.exptime_report(res, cond, mode, area) + '\n')
         return res
 
     def calculate_limit(self, filter, exptime, snr=5.0, mode='point', area=1.0, verbose=True, **cond_kw):
@@ -200,7 +194,7 @@ class ExposureCalculator:
             p = self.band_params(f, cond)
             S = self.limit_flux(p, npix, exptime, snr)
             res[f] = {'filter': f, 'limit': float(p['zp_e_s'] - 2.5 * np.log10(S / A)), 'exptime': float(exptime),
-                      'snr': float(snr), 'n_frame': int(self.n_frame(exptime)), 'frames': self.frames_text(exptime), **p}
+                      'snr': float(snr), 'n_frame': int(self.n_frame(exptime)), **p}
         if verbose:
             self._print(res, cond, mode, area, 'limit')
         return res
@@ -219,21 +213,78 @@ class ExposureCalculator:
                   f'Frame = {self.frame_time:g} s']
         return '\n'.join(lines)
 
+    def detector_text(self):
+        """Detector setup common to every band."""
+        return '\n'.join([f'Setting        : GAIN {C.GAIN_MODE}, 1x1 binning, pixel scale = {self.pixscale:g} "/pix',
+                          f'Gain           : {C.EGAIN:g} e-/ADU',
+                          f'Read noise     : {self.rn:.2f} e-/pix (per frame)',
+                          f'Dark current   : {self.dark:g} e-/s/pix',
+                          f'Frame          : {self.frame_time:g} s per frame (N_frame = number of frames)'])
+
+    def source_text(self, res, mode, area):
+        """Source type, brightness, SNR and measurement geometry."""
+        vals, snrs = {r['value'] for r in res.values()}, {r['snr'] for r in res.values()}
+        unit = 'mag (AB)' if mode == 'point' else 'mag/arcsec^2'
+        val = f'{vals.pop():g} {unit}' if len(vals) == 1 else f'per filter [{unit}]'
+        snr = f'{snrs.pop():g}' if len(snrs) == 1 else 'per filter'
+        geo = (f'aperture diameter = {self.aperture:g}", enclosed pixels = {self.n_ref:.1f}' if mode == 'point' else
+               f'area = {area:g} arcsec^2 ({area / self.pixscale ** 2:.1f} pixels)'
+               + (f', sky sys = {self.sky_sys_frac:g}' if self.sky_sys_frac else ''))
+        return '\n'.join([f'Source         : {mode} source, {val}, target SNR = {snr}', f'Measurement    : {geo}'])
+
+    def cond_text(self, cond):
+        """Observing conditions used for the calculation."""
+        lines = []
+        if cond['ra'] is not None:
+            lines.append(f"Target         : RA = {cond['ra']:.4f}, Dec = {cond['dec']:.4f} deg")
+        if cond['obsdate'] is not None:
+            lines.append(f"Obsdate        : {cond['obsdate'].iso[:19]} UTC")
+        lines += [f"Moon           : phase = {cond['moon_phase']:.2f}, separation = {cond['moon_separation']:.1f} deg",
+                  f"Airmass        : {cond['airmass']:.2f}", f"Seeing         : {cond['seeing']:.2f} arcsec"]
+        return '\n'.join(lines)
+
+    def exptime_report(self, res, cond, mode, area, plan=None, warn_threshold=None):
+        """
+        Text report of calculate_exptime (detector, source, conditions, [observation plan], per-band table).
+        sky    : sky surface brightness [mag/arcsec^2] and sky rate [e-/s/pix]
+        skysig : background RMS per pixel in one frame (sky + dark + read noise) [e-] and [ADU]
+        """
+        bar = '=' * 78
+        out = [bar, f'7DT Exposure Time Calculator (sevendt_etc {_version()})', bar,
+               '[Detector]', self.detector_text(), '', '[Source]', self.source_text(res, mode, area), '',
+               '[Conditions]', self.cond_text(cond), '']
+        if plan:
+            out += ['[Observation plan]', plan, '']
+        vary = len({(r['value'], r['snr']) for r in res.values()}) > 1
+        vh, vu = (f"{'value':>7} {'SNR':>5} ", ' ' * 14) if vary else ('', '')
+        out += [f'[Exposure time per band]  (skysig: per pixel, one {self.frame_time:g} s frame)',
+                f"{'filter':6} {vh}{'sky':>9} {'sky':>10} {'skysig':>7} {'skysig':>7} {'T_exp':>10} {'N_frame':>8}",
+                f"{'':6} {vu}{'[mag/as2]':>9} {'[e-/s/pix]':>10} {'[e-]':>7} {'[ADU]':>7} {'[s]':>10}"]
+        for r in res.values():
+            v = f"{r['value']:7.2f} {r['snr']:5.1f} " if vary else ''
+            T = f"{r['exptime']:10.1f}" if np.isfinite(r['exptime']) else f"{'-':>10}"
+            n = f"{r['n_frame']:8d}" if r['n_frame'] > 0 else f"{'-':>8}"
+            flag = '  !' if warn_threshold is not None and r['exptime'] > warn_threshold else ''
+            out.append(f"{r['filter']:6} {v}{r['mu_sky']:9.2f} {r['sky_rate']:10.4f} {r['skysig_e']:7.2f} "
+                       f"{r['skysig_adu']:7.2f} {T} {n}{flag}")
+        if warn_threshold is not None and any(r['exptime'] > warn_threshold for r in res.values()):
+            out.append(f'! : longer than {warn_threshold:g} s')
+        bad = [r['filter'] for r in res.values() if r['floor_hit']]
+        if bad:
+            out.append(f'WARNING {bad}: predicted background below the read-noise floor (conditions outside the training range?)')
+        return '\n'.join(out + [bar])
+
     def _print(self, res, cond, mode, area, kind):
         print(self.conditions_text(cond, mode, area))
         unit = 'mag' if mode == 'point' else 'mag/arcsec^2'
         if kind == 'snr':
-            print(f"{'filter':6} {'value':>7} {'T[s]':>9} {'SNR':>8}  frames")
+            print(f"{'filter':6} {'value':>7} {'T[s]':>9} {'SNR':>8} {'N_frame':>8}")
             for r in res.values():
-                print(f"{r['filter']:6} {r['value']:7.2f} {r['exptime']:9.1f} {r['snr']:8.2f}  {r['frames']}")
-        elif kind == 'exptime':
-            print(f"{'filter':6} {'value':>7} {'SNR':>5} {'T[s]':>10}  frames")
-            for r in res.values():
-                print(f"{r['filter']:6} {r['value']:7.2f} {r['snr']:5.1f} {r['exptime']:10.1f}  {r['frames']}")
+                print(f"{r['filter']:6} {r['value']:7.2f} {r['exptime']:9.1f} {r['snr']:8.2f} {r['n_frame']:8d}")
         else:
-            print(f"{'filter':6} {'T[s]':>9} {'SNR':>5} {'limit':>7}  frames")
+            print(f"{'filter':6} {'T[s]':>9} {'SNR':>5} {'limit':>7} {'N_frame':>8}")
             for r in res.values():
-                print(f"{r['filter']:6} {r['exptime']:9.1f} {r['snr']:5.1f} {r['limit']:7.2f}  {r['frames']}")
+                print(f"{r['filter']:6} {r['exptime']:9.1f} {r['snr']:5.1f} {r['limit']:7.2f} {r['n_frame']:8d}")
         print(f'(value / limit in {unit})')
         bad = [r['filter'] for r in res.values() if r['floor_hit']]
         if bad:

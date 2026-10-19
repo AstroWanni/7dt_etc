@@ -1,28 +1,52 @@
-Target RA, Dec = 30.9680, 4.2450 | night of 2026-09-14
-Astronomical twilight (UTC): 2026-09-14 23:54 -> 2026-09-15 09:21
-Above 30 deg (UTC): 2026-09-15 03:48 -> 2026-09-15 09:21 (5.6 h)
-Best time (lowest airmass): 2026-09-15 07:10:50 UTC, alt = 55.2 deg, airmass = 1.22
-Moon phase = 0.18, Moon sep = 162.4 deg, seeing = 2"
-extended source, 24.0 mag/arcsec^2, area 100 arcsec^2, SNR = 5, frame = 100 s
+==============================================================================
+7DT Exposure Time Calculator (sevendt_etc 1.0.0)
+==============================================================================
+[Detector]
+Setting        : GAIN 2750, 1x1 binning, pixel scale = 0.505 "/pix
+Gain           : 0.256 e-/ADU
+Read noise     : 1.50 e-/pix (per frame)
+Dark current   : 0.0005 e-/s/pix
+Frame          : 100 s per frame (N_frame = number of frames)
 
-filter       T[s]  frames
-m400        262.5  2x100s + 1x62.5s
-m425        128.6  1x100s + 1x28.6s
-m450         91.0  1x91.0s
-m475         89.0  1x89.0s
-m500         91.5  1x91.5s
-m525        128.5  1x100s + 1x28.5s
-m550        228.1  2x100s + 1x28.1s
-m575        178.4  1x100s + 1x78.4s
-m600        239.0  2x100s + 1x39.0s
-m625        374.9  3x100s + 1x74.9s
-m650        355.2  3x100s + 1x55.2s
-m675        359.8  3x100s + 1x59.8s
-m700        491.3  4x100s + 1x91.3s
-m725       1061.3  10x100s + 1x61.3s
-m750       1471.1  14x100s + 1x71.1s
-m775       3096.4  30x100s + 1x96.4s
-m800       6495.5  64x100s + 1x95.5s  !
-m825       7161.4  71x100s + 1x61.4s  !
-m850      13933.1  139x100s + 1x33.1s  !
-m875      28438.0  284x100s + 1x38.0s  !
+[Source]
+Source         : extended source, 24 mag/arcsec^2, target SNR = 5
+Measurement    : area = 100 arcsec^2 (392.1 pixels)
+
+[Conditions]
+Target         : RA = 30.9680, Dec = -4.2450 deg
+Obsdate        : 2026-09-15 07:10:50 UTC
+Moon           : phase = 0.18, separation = 154.4 deg
+Airmass        : 1.12
+Seeing         : 2.00 arcsec
+
+[Observation plan]
+Night          : 2026-09-14 (local)
+Twilight       : 2026-09-14 23:54 -> 2026-09-15 09:21 UTC (astronomical)
+Above 30 deg   : 2026-09-15 03:23 -> 2026-09-15 09:21 UTC (6.0 h)
+Recommended    : 2026-09-15 07:10:50 UTC (lowest airmass), alt = 63.6 deg
+
+[Exposure time per band]  (skysig: per pixel, one 100 s frame)
+filter       sky        sky  skysig  skysig      T_exp  N_frame
+       [mag/as2] [e-/s/pix]    [e-]   [ADU]        [s]
+m400       23.54     0.0045    1.66    6.48      251.4        3
+m425       22.78     0.0169    2.00    7.80       97.4        1
+m450       22.47     0.0266    2.23    8.70       88.3        1
+m475       22.34     0.0318    2.34    9.15       86.7        1
+m500       22.09     0.0430    2.57   10.04       88.5        1
+m525       21.82     0.0524    2.75   10.73      124.4        2
+m550       21.01     0.0989    3.49   13.64      218.7        3
+m575       21.32     0.0751    3.13   12.24      171.4        2
+m600       20.97     0.0998    3.50   13.69      229.3        3
+m625       20.69     0.1029    3.55   13.86      359.1        4
+m650       21.20     0.0514    2.73   10.66      345.1        4
+m675       21.68     0.0269    2.23    8.73      354.1        4
+m700       21.20     0.0391    2.49    9.73      478.3        5
+m725       20.64     0.0478    2.66   10.39     1024.0       11
+m750       20.74     0.0326    2.36    9.21     1394.4       14
+m775       20.10     0.0439    2.59   10.11     2955.5       30
+m800       19.35     0.0725    3.09   12.07     6095.8       61  !
+m825       20.01     0.0275    2.25    8.77     6793.4       68  !
+m850       19.47     0.0343    2.39    9.35    13176.7      132  !
+m875       18.85     0.0470    2.64   10.33    26992.5      270  !
+! : longer than 3600 s
+==============================================================================

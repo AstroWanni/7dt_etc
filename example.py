@@ -1,39 +1,15 @@
 """
-7DTC usage examples.
-Run from the repo root: python example.py
+sevendt_etc usage examples (run from the repo root: python example.py).
+See examples/7dt_etc_demo.ipynb for the full walkthrough.
 """
-from astropy.time import Time
-import seventdt as dtc
-from seventdt.plot import plot_exptime_per_filter
-from seventdt.visibility import observe_and_etc
+from sevendt_etc import ExposureCalculator, observe_and_etc
 
-# 1. Point source — exposure time
-result = dtc.calculate_exptime(
-    magnitude=19.5, snr=10, filters='all',
-    seeing=1.5, ra=30.968, dec=4.245,
-    obsdate=Time('2026-09-14T04:00:00'),
-)
-for filt, r in result.items():
-    print(f"  {filt:6}  t_exp = {r['t_exp']:8.1f} s   UL5@100s = {r['ul5_ref']:.2f}")
+calc = ExposureCalculator()
+cond = dict(moon_phase=0.2, moon_separation=120, airmass=1.2, seeing=2.0)
 
-# 2. Point source — SNR
-result_snr = dtc.calculate_snr(
-    magnitude=19.5, exptime=300,
-    filters=['g', 'r', 'i'], seeing=1.5,
-)
-for filt, r in result_snr.items():
-    print(f"  {filt:6}  SNR = {r['snr']:.1f}")
+# 1. Exposure time per band for a 19.5 mag point source at SNR = 10 (main function)
+res = calc.calculate_exptime('all', 19.5, snr=10, **cond)
 
-# 3. Point source — plot
-result_all = dtc.calculate_exptime(magnitude=19.5, snr=10, filters='all', seeing=2.0)
-plot_exptime_per_filter(result_all, magnitude=19.5, snr=10,
-                        save_path='exptime_point_source.png')
-
-# 4. Visibility + ETC
-observe_and_etc(
-    ra=30.968, dec=4.245,
-    date='2026-09-14',
-    magnitude=19.5, snr=10,
-    filters='all', seeing=1.5,
-    save_path='visibility_etc.png',
-)
+# 2. Recommended time on a night + exposure per band (text report + figure)
+res, info = observe_and_etc(ra=30.968, dec=-4.245, date='2026-09-14', value=19.5, snr=5,
+                            save_path='observe_and_etc.png', report_path='observe_and_etc.txt')

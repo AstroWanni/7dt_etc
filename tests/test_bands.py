@@ -1,5 +1,5 @@
 import pytest
-from seventdt import DEFAULT_BANDS, EXTRA_BANDS
+from sevendt_etc import DEFAULT_BANDS, EXTRA_BANDS
 
 
 def test_all_is_default_only(calc):

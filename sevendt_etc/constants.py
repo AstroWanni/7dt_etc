@@ -25,6 +25,11 @@ BROAD_BANDS = ['g', 'r', 'i']
 MEDIUM_BANDS = [f'm{w}' for w in range(400, 876, 25)]
 DEFAULT_BANDS = BROAD_BANDS + MEDIUM_BANDS          # returned by filter='all'
 EXTRA_BANDS = ['z', 'm438', 'm483', 'm512', 'm534', 'm561', 'm586', 'm615', 'm640', 'm661', 'm769w', 'm832w']
+# Filter sets (names reserved, not defined yet)
+# FILTER_SETS = {
+#     'specred' : [],
+#     'specblue': [],
+# }
 EXTRA_BANDS_NOTE = 'few training frames or a different bandwidth; use with caution'
 BAND_WIDTH = {**{f: 25.0 for f in MEDIUM_BANDS}, 'g': 130.0, 'r': 130.0, 'i': 130.0, 'z': 100.0}   # [nm]
 BROAD_WAVE = {'g': 475, 'r': 620, 'i': 760, 'z': 900}   # [nm]

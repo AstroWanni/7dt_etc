@@ -25,13 +25,13 @@ Requirements: `numpy`, `astropy`, `astroplan`, `matplotlib`
 ## Quick Start
 
 ```python
-from seventdt import observe_and_etc
+from sevendt_etc import observe_and_etc
 
 # Point source: exposure time to reach SNR = 5 for a 19.5 mag source
-res, info = observe_and_etc(ra=30.968, dec=4.245, date='2026-09-14', value=19.5, snr=5)
+res, info = observe_and_etc(ra=30.968, dec=-4.245, date='2026-09-14', value=19.5, snr=5)
 
 # Extended source: 24.0 mag/arcsec^2 measured over 100 arcsec^2
-res, info = observe_and_etc(ra=30.968, dec=4.245, date='2026-09-14', value=24.0, snr=5,
+res, info = observe_and_etc(ra=30.968, dec=-4.245, date='2026-09-14', value=24.0, snr=5,
                             mode='extended', area=100)
 ```
 
@@ -70,45 +70,70 @@ observing conditions at that time, and returns the exposure time needed in each 
 ### Text output
 
 ```text
-Target RA, Dec = 30.9680, 4.2450 | night of 2026-09-14
-Astronomical twilight (UTC): 2026-09-14 23:54 -> 2026-09-15 09:21
-Above 30 deg (UTC): 2026-09-15 03:48 -> 2026-09-15 09:21 (5.6 h)
-Best time (lowest airmass): 2026-09-15 07:10:50 UTC, alt = 55.2 deg, airmass = 1.22
-Moon phase = 0.18, Moon sep = 162.4 deg, seeing = 2"
-point source, 19.5 mag, 10" aperture, SNR = 5, frame = 100 s
+==============================================================================
+7DT Exposure Time Calculator (sevendt_etc 1.0.0)
+==============================================================================
+[Detector]
+Setting        : GAIN 2750, 1x1 binning, pixel scale = 0.505 "/pix
+Gain           : 0.256 e-/ADU
+Read noise     : 1.50 e-/pix (per frame)
+Dark current   : 0.0005 e-/s/pix
+Frame          : 100 s per frame (N_frame = number of frames)
 
-filter       T[s]  frames
-m400        478.4  4x100s + 1x78.4s
-m425        197.8  1x100s + 1x97.8s
-m450        177.5  1x100s + 1x77.5s
-m475        173.6  1x100s + 1x73.6s
-m500        178.6  1x100s + 1x78.6s
-m525        234.1  2x100s + 1x34.1s
-m550        434.4  4x100s + 1x34.4s
-m575        349.6  3x100s + 1x49.6s
-m600        455.7  4x100s + 1x55.7s
-m625        736.8  7x100s + 1x36.8s
-m650        677.1  6x100s + 1x77.1s
-m675        679.3  6x100s + 1x79.3s
-m700        966.4  9x100s + 1x66.4s
-m725       2069.2  20x100s + 1x69.2s
-m750       2875.1  28x100s + 1x75.1s
-m775       6089.4  60x100s + 1x89.4s  !
-m800      12790.1  127x100s + 1x90.1s  !
-m825      14072.4  140x100s + 1x72.4s  !
-m850      27394.5  273x100s + 1x94.5s  !
-m875      56027.7  560x100s + 1x27.7s  !
+[Source]
+Source         : point source, 19.5 mag (AB), target SNR = 5
+Measurement    : aperture diameter = 10", enclosed pixels = 308.0
+
+[Conditions]
+Target         : RA = 30.9680, Dec = -4.2450 deg
+Obsdate        : 2026-09-15 07:10:50 UTC
+Moon           : phase = 0.18, separation = 154.4 deg
+Airmass        : 1.12
+Seeing         : 2.00 arcsec
+
+[Observation plan]
+Night          : 2026-09-14 (local)
+Twilight       : 2026-09-14 23:54 -> 2026-09-15 09:21 UTC (astronomical)
+Above 30 deg   : 2026-09-15 03:23 -> 2026-09-15 09:21 UTC (6.0 h)
+Recommended    : 2026-09-15 07:10:50 UTC (lowest airmass), alt = 63.6 deg
+
+[Exposure time per band]  (skysig: per pixel, one 100 s frame)
+filter       sky        sky  skysig  skysig      T_exp  N_frame
+       [mag/as2] [e-/s/pix]    [e-]   [ADU]        [s]
+m400       23.54     0.0045    1.66    6.48      456.4        5
+m425       22.78     0.0169    2.00    7.80      190.1        2
+m450       22.47     0.0266    2.23    8.70      172.3        2
+m475       22.34     0.0318    2.34    9.15      169.2        2
+m500       22.09     0.0430    2.57   10.04      172.6        2
+m525       21.82     0.0524    2.75   10.73      225.8        3
+m550       21.01     0.0989    3.49   13.64      415.6        5
+m575       21.32     0.0751    3.13   12.24      336.0        4
+m600       20.97     0.0998    3.50   13.69      436.2        5
+m625       20.69     0.1029    3.55   13.86      691.3        7
+m650       21.20     0.0514    2.73   10.66      656.9        7
+m675       21.68     0.0269    2.23    8.73      667.9        7
+m700       21.20     0.0391    2.49    9.73      940.8       10
+m725       20.64     0.0478    2.66   10.39     1972.2       20
+m750       20.74     0.0326    2.36    9.21     2750.6       28
+m775       20.10     0.0439    2.59   10.11     5786.1       58  !
+m800       19.35     0.0725    3.09   12.07    11999.6      120  !
+m825       20.01     0.0275    2.25    8.77    13372.8      134  !
+m850       19.47     0.0343    2.39    9.35    25950.2      260  !
+m875       18.85     0.0470    2.64   10.33    53189.6      532  !
+! : longer than 3600 s
+==============================================================================
 ```
 
-
-| Line | Meaning |
+| Section | Meaning |
 |---|---|
-| Astronomical twilight | Start and end of the usable night (Sun below −18°) |
-| Above 30 deg | Time window when the target is above `min_alt`, and its length |
-| Best time | Time of lowest airmass, used for the calculation below |
-| Moon / seeing | Conditions used for the calculation |
-| `T[s]` | Total exposure time to reach the requested SNR |
-| `frames` | How the total is split: `k x 100s + 1 x r s` (100 s frames plus one remainder frame) |
+| Detector | GAIN 2750 / 1×1 setting, gain, read noise, dark current (common to every band), frame time |
+| Source | Source type, brightness, target SNR, aperture (point) or measurement area (extended) |
+| Conditions | Target, time, Moon phase / separation, airmass, seeing used for the calculation |
+| Observation plan | Astronomical twilight, window above `min_alt`, recommended time (lowest airmass) |
+| `sky` | Sky surface brightness [mag/arcsec²] and sky rate [e⁻/s/pix] predicted for the conditions |
+| `skysig` | Background RMS per pixel in one 100 s frame (sky + dark + read noise) [e⁻] and [ADU] |
+| `T_exp` | Total exposure time to reach the requested SNR [s] |
+| `N_frame` | Number of frames (exposures are taken as 100 s frames) |
 | `!` | Longer than `warn_threshold` |
 
 ### Return values
@@ -116,7 +141,9 @@ m875      56027.7  560x100s + 1x27.7s  !
 ```python
 res, info = observe_and_etc(...)
 res['m500']['exptime']   # total exposure time [s]
-res['m500']['frames']    # e.g. '2x100s + 1x48.0s'
+res['m500']['n_frame']   # number of 100 s frames
+res['m500']['mu_sky'], res['m500']['skysig_e']
+info['report']           # text report (also saved with report_path='...')
 info['best_time_utc'], info['airmass'], info['window_utc']
 ```
 
@@ -125,10 +152,10 @@ info['best_time_utc'], info['airmass'], info['window_utc']
 ## Other functions
 
 ```python
-from seventdt import ExposureCalculator
+from sevendt_etc import ExposureCalculator
 
 calc = ExposureCalculator()              # 10" aperture model (default); ExposureCalculator(aperture=5) for 5"
-cond = dict(ra=30.968, dec=4.245, obsdate='2026-09-15T07:10:00', seeing=2.0)
+cond = dict(ra=30.968, dec=-4.245, obsdate='2026-09-15T07:10:00', seeing=2.0)
 
 calc.calculate_snr('all', 19.5, exptime=300, **cond)                               # SNR for a given exposure
 calc.calculate_exptime('all', 19.5, snr=10, **cond)                                # exposure for a given SNR
@@ -147,7 +174,7 @@ calc.plot_noise_budget('m400', 24.0, mode='extended', area=100, **cond)
 |---|---|
 | `filter` | Filter name, list, or `'all'` (g, r, i, m400–m875 in 25 nm steps) |
 | `value` | AB magnitude (`mode='point'`) or surface brightness in mag/arcsec² (`mode='extended'`) |
-| `exptime` | Total exposure time [s]; split into 100 s frames plus one remainder frame |
+| `exptime` | Total exposure time [s]; taken as N = ceil(T / 100 s) frames |
 | `snr` | Target signal-to-noise ratio |
 | `mode` | `'point'` (default) or `'extended'` |
 | `area` | Measurement area for extended sources [arcsec²] |

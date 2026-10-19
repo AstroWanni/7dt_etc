@@ -3,8 +3,8 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "seventdt"
-version = "1.0.1"
+name = "sevendt_etc"
+version = "1.0.0"
 description = "Exposure time calculator for 7DT with an empirical noise model (point and extended sources)"
 authors = [{ name = "GWUniverse @ Seoul National University" }]
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ dependencies = ["numpy", "astropy", "astroplan", "matplotlib"]
 test = ["pytest"]
 
 [tool.setuptools.packages.find]
-include = ["seventdt*"]
+include = ["sevendt_etc*"]
 
 [tool.setuptools.package-data]
-"seventdt.models" = ["*.json"]
+"sevendt_etc.models" = ["*.json"]

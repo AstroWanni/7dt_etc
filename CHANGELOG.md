@@ -1,23 +1,22 @@
 # Changelog
 
-## [1.0.1] — 2026-10-17
-
-### Fixed
-- Plot functions no longer return the Figure by default, so each plot is shown once in Jupyter.
-  Use `return_fig=True` to get the Figure object (e.g. to save in another format).
-
-## [1.0.0] — 2026-10-16
+## [1.0.0] — unreleased (pre-release updates are kept under 1.0.0)
 
 First public release. The calculator is built on an empirical noise model of archived 7DT frames.
 Earlier versions (0.x) were development snapshots and are not supported.
 
 ### Added
+- Package renamed `seventdt` → `sevendt_etc` (`import sevendt_etc`).
+- Text report for `calculate_exptime` / `observe_and_etc` (detector, source, conditions, observation plan,
+  per-band sky [mag/arcsec², e⁻/s/pix], skysig [e⁻, ADU], exposure time and number of frames);
+  `observe_and_etc(..., report_path=...)` saves it, `info['report']` returns it.
+- Plot functions do not return the Figure by default (each plot is shown once in Jupyter); `return_fig=True` returns it.
 - **Noise model**: SNR = S·T / sqrt(S·T + Npix·(B·T + N·RN²)), with the per-pixel background B derived from the
   depth model and the read noise counted once per frame (RN = 1.50 e⁻, dark = 0.0005 e⁻/s/pix, gain 0.256 e⁻/ADU,
   measured from 2026 bias / dark / flat frames, GAIN 2750, 1×1).
 - **Extended sources**: `mode='extended'` with surface brightness [mag/arcsec²] and measurement `area` [arcsec²].
-- **Multi-frame exposures**: totals longer than 100 s are split into 100 s frames plus one remainder frame
-  (e.g. `3x100s + 1x50.0s`); reported in every result.
+- **Multi-frame exposures**: totals longer than 100 s are taken as N = ceil(T / 100 s) frames;
+  the number of frames (`n_frame`) is reported in every result.
 - **New depth models** (2024–2026, 100 s, GAIN 2750, 1×1), one per aperture:
   `models/depth_model_ul5_5.json` (10″, default) and `models/depth_model_ul5_4.json` (5″);
   each band carries its own `zp_e_s` and aperture.
@@ -41,13 +40,13 @@ Earlier versions (0.x) were development snapshots and are not supported.
 |---|---|
 | `calculate_exptime(filter, magnitude, snr, ...)` | `calculate_exptime(filter, value, snr, mode='point', area=1.0, ...)` |
 | `calculate_snr(filter, magnitude, exptime, ...)` | `calculate_snr(filter, value, exptime, mode='point', area=1.0, ...)` |
-| result key `t_exp` | `exptime` (+ `n_frame`, `frames`) |
+| result key `t_exp` | `exptime` (+ `n_frame`) |
 | `hour_since_sunset` condition | removed; `airmass` added |
 | `calc.load_model()` / `update_depth_model()` / `fit_depth_model()` | removed; models are packaged (refit with the analysis scripts) |
 | `observe_and_etc(..., magnitude=...)` | `observe_and_etc(..., value=..., mode=..., area=...)` |
 
 ### Removed
-- `seventdt/core.py` (previous calculator) and `depth_model_20260329052547.json`.
+- `sevendt_etc/core.py` (previous calculator) and `depth_model_20260329052547.json`.
 
 ### Known limitations
 - GAIN 2750, 1×1 binning only.

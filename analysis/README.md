@@ -1,6 +1,6 @@
 # analysis — how the packaged models were built
 
-These scripts rebuild the detector noise constants and the depth models shipped in `seventdt/models/`.
+These scripts rebuild the detector noise constants and the depth models shipped in `sevendt_etc/models/`.
 They are **not** part of the installed package: they read the 7DT archive and database directly, so paths
 at the top of each script point to the GWUniverse servers (`/lyman`, `/data3`). Edit them for your environment.
 
@@ -11,7 +11,7 @@ Scope: GAIN 2750 (high gain), 1×1 binning, `processing_version = 'v2'`.
 | 0 | `00_query_frames.sql` | `gwu` database | `noise_v2_frames.csv` (one row per processed frame) | input of steps 2–3 |
 | 1 | `01_detector_noise_raw.py` | raw BIAS / DARK / FLAT frames (`/lyman/data1/obsdata`) | `detector_2026.csv`, `flat_ptc_2026.csv` | `READ_NOISE = 1.50 e⁻`, `DARK_CURRENT = 0.0005 e⁻/s/pix`, `EGAIN = 0.256 e⁻/ADU` (`constants.py`) |
 | 2 | `02_skysig_vs_model.py` | `noise_v2_frames.csv` | `skysig_vs_model.png`, per-exposure summary | validation: predicted pixel noise sqrt(sky·t + dark·t + RN²) vs header SKYSIG, 3–120 s |
-| 3 | `03_fit_depth_model.py` | `noise_v2_frames.csv` | `depth_model_ul5_4_<stamp>.json`, `depth_model_ul5_5_<stamp>.json`, validation CSV | `seventdt/models/depth_model_ul5_4.json`, `depth_model_ul5_5.json` |
+| 3 | `03_fit_depth_model.py` | `noise_v2_frames.csv` | `depth_model_ul5_4_<stamp>.json`, `depth_model_ul5_5_<stamp>.json`, validation CSV | `sevendt_etc/models/depth_model_ul5_4.json`, `depth_model_ul5_5.json` |
 | 4 | `04_validate_snr_T02524.py` | processed frames + catalogs of one tile (`/lyman/data2/processed`) | empty-aperture and repeatability tables | validation: aperture noise and repeated-measurement SNR vs the noise model |
 
 ## Updating the models
@@ -19,8 +19,8 @@ Scope: GAIN 2750 (high gain), 1×1 binning, `processing_version = 'v2'`.
 ```bash
 psql -U gwuteam -p 5433 gwu --csv -f 00_query_frames.sql -o /data3/cwkim/exptimecal/noise_v2_frames.csv
 python 03_fit_depth_model.py
-cp <OUT_DIR>/depth_model_ul5_5_<stamp>.json ../seventdt/models/depth_model_ul5_5.json
-cp <OUT_DIR>/depth_model_ul5_4_<stamp>.json ../seventdt/models/depth_model_ul5_4.json
+cp <OUT_DIR>/depth_model_ul5_5_<stamp>.json ../sevendt_etc/models/depth_model_ul5_5.json
+cp <OUT_DIR>/depth_model_ul5_4_<stamp>.json ../sevendt_etc/models/depth_model_ul5_4.json
 python -m pytest -q ../tests
 ```
 

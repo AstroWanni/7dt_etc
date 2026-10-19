@@ -8,11 +8,11 @@ import io
 from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
-from seventdt import observe_and_etc
+from sevendt_etc import observe_and_etc
 
 DOCS = Path('docs')
 DOCS.mkdir(exist_ok=True)
-TARGET = dict(ra=30.968, dec=4.245, date='2026-09-14', seeing=2.0)
+TARGET = dict(ra=30.968, dec=-4.245, date='2026-09-14', seeing=2.0)
 CASES = {'point': dict(value=19.5, snr=5),
          'extended': dict(value=24.0, snr=5, mode='extended', area=100)}
 for name, kw in CASES.items():
