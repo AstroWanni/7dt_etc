@@ -4,8 +4,11 @@
 Conditions -> depth model (UL5 of a 100 s frame, aperture D) -> per-pixel background
     UL5 = b0 + b1*moon_phase + b2*moon_sep + b3*airmass + b4*seeing
     sigma_ap = 10^(-0.4 (UL5 - ZP)) * t_ref / 5,  var_pix = sigma_ap^2 / N_ref,  B = (var_pix - RN^2) / t_ref
-Total exposure T is taken as N = ceil(T / frame_time) frames (read noise counted once per frame):
+Total exposure T taken in N frames (read noise counted once per frame):
     SNR = S*T / sqrt( S*T + Npix * (B*T + N*RN^2) + (f_sys * B_sky*T*Npix)^2 )
+    single exposure : N = 1
+    stacked frames  : T = N * frame_time (N frames of 100 s) -> SNR = sqrt(N) * SNR(one frame)
+    given T only    : N = ceil(T / frame_time)  (calculate_snr / calculate_limit)
     point    : S = 10^(-0.4 (m  - ZP)),     Npix = pixels in the aperture
     extended : S = 10^(-0.4 (mu - ZP)) * A, Npix = A / pixscale^2   (mu [mag/arcsec^2], A [arcsec^2])
 """
@@ -109,36 +112,42 @@ class ExposureCalculator:
         return np.maximum(1, np.ceil(np.asarray(T, float) / self.frame_time - 1e-9)).astype(int)
 
     # ---------------- noise model ----------------
-    def var_components(self, S, p, npix, T):
+    def var_components(self, S, p, npix, T, n_frame=None):
+        """Variance terms for total exposure T in n_frame frames (default ceil(T / frame_time); 1 = single exposure)."""
         T = np.asarray(T, float)
+        n = self.n_frame(T) if n_frame is None else np.asarray(n_frame)
         return {'source': S * T, 'sky': npix * p['sky_rate'] * T, 'dark': npix * (p['bkg_rate'] - p['sky_rate']) * T,
-                'read': npix * self.n_frame(T) * self.rn ** 2,
+                'read': npix * n * self.rn ** 2,
                 'systematic': (self.sky_sys_frac * p['sky_rate'] * T * npix) ** 2}
 
-    def snr(self, S, p, npix, T):
+    def snr(self, S, p, npix, T, n_frame=None):
         T = np.asarray(T, float)
-        return S * T / np.sqrt(sum(self.var_components(S, p, npix, T).values()))
+        return S * T / np.sqrt(sum(self.var_components(S, p, npix, T, n_frame).values()))
 
-    def exptime(self, S, p, npix, snr):
-        """Smallest total T reaching snr -> (T, number of frames)."""
+    def exptime_single(self, S, p, npix, snr):
+        """Single-exposure time [s] reaching snr (read noise once)."""
         if self.sky_sys_frac == 0:
             k = snr ** 2 * (S + npix * p['bkg_rate'])
-            n = 1
-            for _ in range(1000000):
-                T = (k + np.sqrt(k ** 2 + 4 * S ** 2 * snr ** 2 * n * npix * self.rn ** 2)) / (2 * S ** 2)
-                if T <= n * self.frame_time + 1e-9:
-                    return float(T), n
-                n = int(np.ceil(T / self.frame_time - 1e-9))
-        T = np.logspace(-2, 8, 5000)
-        ok = self.snr(S, p, npix, T) >= snr
-        if not ok.any():
-            return np.inf, -1
-        return float(T[np.argmax(ok)]), int(self.n_frame(T[np.argmax(ok)]))
+            return float((k + np.sqrt(k ** 2 + 4 * S ** 2 * snr ** 2 * npix * self.rn ** 2)) / (2 * S ** 2))
+        T = np.logspace(-3, 9, 20000)
+        ok = self.snr(S, p, npix, T, n_frame=1) >= snr
+        return float(T[np.argmax(ok)]) if ok.any() else np.inf
 
-    def limit_flux(self, p, npix, T, snr):
-        """Flux S [e-/s] reaching snr in total exposure T."""
+    def n_frame_stack(self, S, p, npix, snr, n_max=10 ** 7):
+        """Number of frame_time frames to stack for snr (SNR = sqrt(N) * one-frame SNR); -1 if unreachable."""
+        f = lambda n: self.snr(S, p, npix, n * self.frame_time, n_frame=n)
+        if f(n_max) < snr:
+            return -1
+        lo, hi = 0, n_max
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            lo, hi = (lo, mid) if f(mid) >= snr else (mid, hi)
+        return hi
+
+    def limit_flux(self, p, npix, T, snr, n_frame=None):
+        """Flux S [e-/s] reaching snr in total exposure T (n_frame frames; default ceil(T / frame_time))."""
         T = np.asarray(T, float)
-        V = sum(v for k, v in self.var_components(0.0, p, npix, T).items() if k != 'source')
+        V = sum(v for k, v in self.var_components(0.0, p, npix, T, n_frame).items() if k != 'source')
         return (snr ** 2 * T + np.sqrt(snr ** 4 * T ** 2 + 4 * T ** 2 * snr ** 2 * V)) / (2 * T ** 2)
 
     @staticmethod
@@ -172,15 +181,22 @@ class ExposureCalculator:
         return res
 
     def calculate_exptime(self, filter, value, snr=5.0, mode='point', area=1.0, verbose=True, **cond_kw):
-        """Total exposure [s] to reach 'snr' for 'value' (mag or mag/arcsec^2)."""
+        """
+        Exposure to reach 'snr' for 'value' (mag or mag/arcsec^2).
+        exptime_single : one exposure [s]
+        n_frame        : number of frame_time (100 s) frames to stack
+        exptime        : stacked total = n_frame * frame_time [s]
+        """
         cond = resolve_conditions(**cond_kw)
         npix, A = self.geometry(mode, area)
         keys, filters, vals, snrs = self._broadcast(filter, value, snr)
         res = {}
         for key, f, v, s in zip(keys, filters, vals, snrs):
             p = self.band_params(f, cond)
-            T, n = self.exptime(10 ** (-0.4 * (v - p['zp_e_s'])) * A, p, npix, s)
-            res[key] = {'filter': f, 'value': float(v), 'snr': float(s), 'exptime': T, 'n_frame': n, **p}
+            S = 10 ** (-0.4 * (v - p['zp_e_s'])) * A
+            n = self.n_frame_stack(S, p, npix, s)
+            res[key] = {'filter': f, 'value': float(v), 'snr': float(s), 'exptime_single': self.exptime_single(S, p, npix, s),
+                        'n_frame': n, 'exptime': n * self.frame_time if n > 0 else np.inf, **p}
         if verbose:
             print(self.exptime_report(res, cond, mode, area) + '\n')
         return res
@@ -248,6 +264,7 @@ class ExposureCalculator:
         Text report of calculate_exptime (detector, source, conditions, [observation plan], per-band table).
         sky    : sky surface brightness [mag/arcsec^2] and sky rate [e-/s/pix]
         skysig : background RMS per pixel in one frame (sky + dark + read noise) [e-] and [ADU]
+        T_single : one exposure [s];  T_stack = N_frame x frame_time (stacked frames) [s]
         """
         bar = '=' * 78
         out = [bar, f'7DT Exposure Time Calculator (sevendt_etc {_version()})', bar,
@@ -257,18 +274,20 @@ class ExposureCalculator:
             out += ['[Observation plan]', plan, '']
         vary = len({(r['value'], r['snr']) for r in res.values()}) > 1
         vh, vu = (f"{'value':>7} {'SNR':>5} ", ' ' * 14) if vary else ('', '')
-        out += [f'[Exposure time per band]  (skysig: per pixel, one {self.frame_time:g} s frame)',
-                f"{'filter':6} {vh}{'sky':>9} {'sky':>10} {'skysig':>7} {'skysig':>7} {'T_exp':>10} {'N_frame':>8}",
-                f"{'':6} {vu}{'[mag/as2]':>9} {'[e-/s/pix]':>10} {'[e-]':>7} {'[ADU]':>7} {'[s]':>10}"]
+        ft = f'{self.frame_time:g}'
+        out += [f'[Exposure time per band]  (skysig: per pixel, one {ft} s frame)',
+                f'  T_single : one exposure;  T_stack = N_frame x {ft} s frames (SNR = sqrt(N_frame) x one-frame SNR)',
+                f"{'filter':6} {vh}{'sky':>9} {'sky':>10} {'skysig':>7} {'skysig':>7} {'T_single':>10} {'T_stack':>10} {'N_frame':>8}",
+                f"{'':6} {vu}{'[mag/as2]':>9} {'[e-/s/pix]':>10} {'[e-]':>7} {'[ADU]':>7} {'[s]':>10} {'[s]':>10} {f'[{ft} s]':>8}"]
+        fmt = lambda x, w: f'{x:{w}.1f}' if np.isfinite(x) else f"{'-':>{w}}"
         for r in res.values():
             v = f"{r['value']:7.2f} {r['snr']:5.1f} " if vary else ''
-            T = f"{r['exptime']:10.1f}" if np.isfinite(r['exptime']) else f"{'-':>10}"
             n = f"{r['n_frame']:8d}" if r['n_frame'] > 0 else f"{'-':>8}"
             flag = '  !' if warn_threshold is not None and r['exptime'] > warn_threshold else ''
             out.append(f"{r['filter']:6} {v}{r['mu_sky']:9.2f} {r['sky_rate']:10.4f} {r['skysig_e']:7.2f} "
-                       f"{r['skysig_adu']:7.2f} {T} {n}{flag}")
+                       f"{r['skysig_adu']:7.2f} {fmt(r['exptime_single'], 10)} {fmt(r['exptime'], 10)} {n}{flag}")
         if warn_threshold is not None and any(r['exptime'] > warn_threshold for r in res.values()):
-            out.append(f'! : longer than {warn_threshold:g} s')
+            out.append(f'! : T_stack longer than {warn_threshold:g} s')
         bad = [r['filter'] for r in res.values() if r['floor_hit']]
         if bad:
             out.append(f'WARNING {bad}: predicted background below the read-noise floor (conditions outside the training range?)')

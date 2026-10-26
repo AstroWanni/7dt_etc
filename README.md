@@ -61,9 +61,9 @@ observing conditions at that time, and returns the exposure time needed in each 
 
 | Element | Meaning |
 |---|---|
-| Points | Total exposure time needed to reach the requested SNR (m400–m875, 25 nm steps) |
+| Points | Stacked exposure `T_stack` = N_frame × 100 s needed to reach the requested SNR (m400–m875, 25 nm steps) |
 | Horizontal bar | Filter bandwidth (25 nm) |
-| Label above point | Total exposure time; ⚠ marks times longer than `warn_threshold` (default 1 h) |
+| Label above point | `T_stack`; ⚠ marks times longer than `warn_threshold` (default 1 h) |
 | Dotted line | One frame (100 s) |
 | Title | Source type, brightness, aperture (point) or area (extended), SNR |
 
@@ -98,29 +98,30 @@ Above 30 deg   : 2026-09-15 03:23 -> 2026-09-15 09:21 UTC (6.0 h)
 Recommended    : 2026-09-15 07:10:50 UTC (lowest airmass), alt = 63.6 deg
 
 [Exposure time per band]  (skysig: per pixel, one 100 s frame)
-filter       sky        sky  skysig  skysig      T_exp  N_frame
-       [mag/as2] [e-/s/pix]    [e-]   [ADU]        [s]
-m400       23.54     0.0045    1.66    6.48      456.4        5
-m425       22.78     0.0169    2.00    7.80      190.1        2
-m450       22.47     0.0266    2.23    8.70      172.3        2
-m475       22.34     0.0318    2.34    9.15      169.2        2
-m500       22.09     0.0430    2.57   10.04      172.6        2
-m525       21.82     0.0524    2.75   10.73      225.8        3
-m550       21.01     0.0989    3.49   13.64      415.6        5
-m575       21.32     0.0751    3.13   12.24      336.0        4
-m600       20.97     0.0998    3.50   13.69      436.2        5
-m625       20.69     0.1029    3.55   13.86      691.3        7
-m650       21.20     0.0514    2.73   10.66      656.9        7
-m675       21.68     0.0269    2.23    8.73      667.9        7
-m700       21.20     0.0391    2.49    9.73      940.8       10
-m725       20.64     0.0478    2.66   10.39     1972.2       20
-m750       20.74     0.0326    2.36    9.21     2750.6       28
-m775       20.10     0.0439    2.59   10.11     5786.1       58  !
-m800       19.35     0.0725    3.09   12.07    11999.6      120  !
-m825       20.01     0.0275    2.25    8.77    13372.8      134  !
-m850       19.47     0.0343    2.39    9.35    25950.2      260  !
-m875       18.85     0.0470    2.64   10.33    53189.6      532  !
-! : longer than 3600 s
+  T_single : one exposure;  T_stack = N_frame x 100 s frames (SNR = sqrt(N_frame) x one-frame SNR)
+filter       sky        sky  skysig  skysig   T_single    T_stack  N_frame
+       [mag/as2] [e-/s/pix]    [e-]   [ADU]        [s]        [s]  [100 s]
+m400       23.54     0.0045    1.66    6.48      239.4      500.0        5
+m425       22.78     0.0169    2.00    7.80      152.7      200.0        2
+m450       22.47     0.0266    2.23    8.70      142.1      200.0        2
+m475       22.34     0.0318    2.34    9.15      141.2      200.0        2
+m500       22.09     0.0430    2.57   10.04      147.8      200.0        2
+m525       21.82     0.0524    2.75   10.73      181.2      300.0        3
+m550       21.01     0.0989    3.49   13.64      350.4      500.0        5
+m575       21.32     0.0751    3.13   12.24      277.6      400.0        4
+m600       20.97     0.0998    3.50   13.69      370.6      500.0        5
+m625       20.69     0.1029    3.55   13.86      590.5      700.0        7
+m650       21.20     0.0514    2.73   10.66      495.4      700.0        7
+m675       21.68     0.0269    2.23    8.73      438.0      700.0        7
+m700       21.20     0.0391    2.49    9.73      648.7     1000.0       10
+m725       20.64     0.0478    2.66   10.39     1398.0     2000.0       20
+m750       20.74     0.0326    2.36    9.21     1714.1     2800.0       28
+m775       20.10     0.0439    2.59   10.11     3914.8     5800.0       58  !
+m800       19.35     0.0725    3.09   12.07     9225.1    12000.0      120  !
+m825       20.01     0.0275    2.25    8.77     7546.3    13400.0      134  !
+m850       19.47     0.0343    2.39    9.35    15885.6    26000.0      260  !
+m875       18.85     0.0470    2.64   10.33    36207.6    53200.0      532  !
+! : T_stack longer than 3600 s
 ==============================================================================
 ```
 
@@ -132,8 +133,9 @@ m875       18.85     0.0470    2.64   10.33    53189.6      532  !
 | Observation plan | Astronomical twilight, window above `min_alt`, recommended time (lowest airmass) |
 | `sky` | Sky surface brightness [mag/arcsec²] and sky rate [e⁻/s/pix] predicted for the conditions |
 | `skysig` | Background RMS per pixel in one 100 s frame (sky + dark + read noise) [e⁻] and [ADU] |
-| `T_exp` | Total exposure time to reach the requested SNR [s] |
-| `N_frame` | Number of frames (exposures are taken as 100 s frames) |
+| `T_single` | Exposure time to reach the requested SNR in a single exposure [s] |
+| `T_stack` | Total time when stacking 100 s frames, `N_frame` × 100 s [s] |
+| `N_frame` | Number of 100 s frames to stack (SNR = √N_frame × one-frame SNR) |
 | `!` | Longer than `warn_threshold` |
 
 ### Return values
@@ -141,7 +143,8 @@ m875       18.85     0.0470    2.64   10.33    53189.6      532  !
 ```python
 res, info = observe_and_etc(...)
 res['m500']['exptime']   # total exposure time [s]
-res['m500']['n_frame']   # number of 100 s frames
+res['m500']['n_frame']   # number of 100 s frames to stack
+res['m500']['exptime_single']   # single-exposure time [s];  res['m500']['exptime'] = n_frame x 100 s
 res['m500']['mu_sky'], res['m500']['skysig_e']
 info['report']           # text report (also saved with report_path='...')
 info['best_time_utc'], info['airmass'], info['window_utc']
@@ -162,10 +165,10 @@ calc.calculate_exptime('all', 19.5, snr=10, **cond)                             
 calc.calculate_limit('all', exptime=300, snr=5, **cond)                            # limiting magnitude
 calc.calculate_limit('all', exptime=300, snr=3, mode='extended', area=100, **cond) # limiting surface brightness
 
-calc.plot_snr_vs_exptime('all', 19.5, **cond)
+calc.plot_snr_vs_exptime('all', 19.5, **cond)   # line: single 1-1000 s; points: 100 s frames stacked (100-10000 s)
 calc.plot_exptime_vs_snr('all', 19.5, **cond)
-calc.plot_limit_vs_exptime('all', snr=3, mode='extended', area=100, **cond)
-calc.plot_noise_budget('m400', 24.0, mode='extended', area=100, **cond)
+calc.plot_limit_vs_exptime('all', snr=3, mode='extended', area=100, **cond)   # single exposure, 1-1000 s
+calc.plot_noise_budget('m400', 24.0, mode='extended', area=100, **cond)        # single exposure, 1-1000 s
 ```
 
 ### Inputs

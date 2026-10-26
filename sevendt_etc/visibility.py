@@ -122,7 +122,7 @@ def observe_and_etc(ra, dec, date, value, snr=5.0, mode='point', area=100.0, see
     ax2.set_xticklabels(bands, rotation=45, fontsize=11)
     ax2.tick_params(axis='y', labelsize=13)
     ax2.set_xlabel('Filter', fontsize=15)
-    ax2.set_ylabel(f'Exposure for SNR = {snr:g} (s)', fontsize=15)
+    ax2.set_ylabel(f'Stacked exposure for SNR = {snr:g} (s)', fontsize=15)
     ax2.yaxis.set_major_locator(LogLocator(base=10))
     ax2.grid(axis='y', which='major', alpha=0.4)
     ax2.grid(axis='y', which='minor', visible=False)

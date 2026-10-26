@@ -28,6 +28,11 @@ Earlier versions (0.x) were development snapshots and are not supported.
 - Tests (`tests/`).
 
 ### Changed
+- **Single exposure vs 100 s stack**: `calculate_exptime` reports both `T_single` (`exptime_single`, one exposure)
+  and `T_stack` (`exptime` = `n_frame` × 100 s, SNR = √N × one-frame SNR); the text report gets a `T_single` column.
+- Auxiliary plots: `plot_noise_budget` and `plot_limit_vs_exptime` show a single exposure (1–1000 s);
+  `plot_snr_vs_exptime` / `plot_exptime_vs_snr` draw the single exposure as lines and stacked 100 s frames as points
+  (100–10000 s). The √t reference line was removed.
 - Depth model features: `moon_phase, moon_sep, airmass, seeing` (was `moon_phase, moon_sep, hour_since_sunset, seeing`).
 - `filter='all'` returns g, r, i and m400–m875 (25 nm steps). z, m438, m483, m512, m534, m561, m586, m615, m640, m661,
   m769w, m832w remain in the model files and can be requested by name (a warning is printed);

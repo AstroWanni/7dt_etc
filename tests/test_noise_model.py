@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from conftest import COND, DARK
+from sevendt_etc import resolve_conditions
 
 
 def test_sky_limited_sqrt_t(calc):
@@ -27,9 +28,23 @@ def test_bright_source_photon_noise(calc):
 @pytest.mark.parametrize('mode,area,value', [('point', 1.0, 19.5), ('extended', 100.0, 24.0)])
 @pytest.mark.parametrize('snr', [3, 10, 50])
 def test_exptime_roundtrip(calc, mode, area, value, snr):
-    t = calc.calculate_exptime('m600', value, snr=snr, mode=mode, area=area, verbose=False, **COND)['m600']['exptime']
-    s = calc.calculate_snr('m600', value, t, mode=mode, area=area, verbose=False, **COND)['m600']['snr']
-    assert s == pytest.approx(snr, rel=1e-6)
+    """Single exposure reaches snr exactly; stacked N frames reach it, N - 1 do not."""
+    r = calc.calculate_exptime('m600', value, snr=snr, mode=mode, area=area, verbose=False, **COND)['m600']
+    p = calc.band_params('m600', resolve_conditions(**COND))
+    npix, A = calc.geometry(mode, area)
+    S = 10 ** (-0.4 * (value - p['zp_e_s'])) * A
+    assert calc.snr(S, p, npix, r['exptime_single'], n_frame=1) == pytest.approx(snr, rel=1e-6)
+    n, ft = r['n_frame'], calc.frame_time
+    assert r['exptime'] == n * ft
+    assert calc.snr(S, p, npix, n * ft, n_frame=n) >= snr
+    assert n == 1 or calc.snr(S, p, npix, (n - 1) * ft, n_frame=n - 1) < snr
+
+
+def test_stack_sqrt_n(calc):
+    """N stacked frames: SNR = sqrt(N) x one-frame SNR."""
+    p = calc.band_params('m500', resolve_conditions(**COND))
+    s1, s9 = (calc.snr(100.0, p, calc.n_ref, n * calc.frame_time, n_frame=n) for n in (1, 9))
+    assert s9 / s1 == pytest.approx(3.0, rel=1e-9)
 
 
 @pytest.mark.parametrize('mode,area', [('point', 1.0), ('extended', 100.0)])
